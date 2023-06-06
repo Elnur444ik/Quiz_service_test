@@ -9,7 +9,6 @@ class QuestionCount(BaseModel):
 
 
 class QuestionSave(BaseModel):
-    table_id: uuid.UUID
     question_id: int
     question_text: str
     answer_text: str

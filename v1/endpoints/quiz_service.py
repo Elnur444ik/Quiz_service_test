@@ -1,11 +1,10 @@
 import asyncio
-from typing import List
-
-import aiohttp
-from aiohttp import ClientResponse
+from typing import List, Any
+import httpx
 from fastapi import APIRouter, HTTPException, Depends
+from httpx import Response
 from sqlalchemy.ext.asyncio import AsyncSession
-
+from sqlalchemy import select, JSON
 from core.models.database import get_async_session
 from core.models.models import Question
 from core.schemas.schema import QuestionCount, QuestionSave
@@ -16,8 +15,14 @@ router = APIRouter(
 )
 
 
-async def add_question(question: dict, session: AsyncSession = Depends(get_async_session)) -> bool:
-    if not Question.query.filter(Question.question_id == question.get('id')):
+async def add_question(question: dict, session: AsyncSession = Depends(get_async_session)):
+    # if not Question.filter(Question.question_id == question.get('id')):
+    query = select(Question).where(Question.question_id == question.get('id')).exists()
+    # result = await session.execute(query)
+    print(type(query))
+    print(query)
+    print('fdsfsdfsdfsdfsdfsdfsdfsdfsdfsdfdsfsdfsdfsdfsdfsdfsdfsdfsdfsdf')
+    if not query:
         stmt = Question.insert().values(
             question_id=question.get('id'),
             question_text=question.get('question'),
@@ -30,7 +35,7 @@ async def add_question(question: dict, session: AsyncSession = Depends(get_async
         return True
 
 
-async def add_questions(data: List[dict]) -> int:
+async def add_questions(data: JSON) -> int:
     added_count = 0
     for question in data:
         if await add_question(question):
@@ -38,31 +43,27 @@ async def add_questions(data: List[dict]) -> int:
     return added_count
 
 
-async def fetch_content(url, session) -> ClientResponse:
-    async with session.get(url, allow_redirect=True) as response:
-        if response.status != '200':
+async def request_questions(count: int) -> JSON:
+    async with httpx.AsyncClient() as client:
+        url = f"https://jservice.io/api/random?count={count}"
+        response = await client.get(url)
+        if response.status_code != 200:
             raise HTTPException(
-                status_code=response.status,
+                status_code=response.status_code,
                 detail='Ошибка при получении вопросов со стороннего API'
             )
-        return response
+        return response.json()
 
 
-async def request_questions(count: int) -> List[dict]:
-    url = f'https://jservice.io/api/random?count={count}'
-    async with aiohttp.ClientSession() as session:
-        data = await fetch_content(url, session).json()
-        return data
-
-
-@router.post('', response_model=List[QuestionSave])
+@router.post('/', response_model=List[QuestionSave])
 async def question_count(question_num: QuestionCount, session: AsyncSession = Depends(get_async_session)):
     """Получаем количество вопросов, которые необходимо добавить"""
     count = question_num.count
-    query = Question.query.order_by(Question.row_id.desc()).first()
+    query = select(Question).order_by(Question.question_id.desc())
     last_question = await session.execute(query)
+    last_question = last_question.first()
     while count > 0:
-        data = asyncio.run(request_questions(count))
+        data = await request_questions(count)
         added_count = await add_questions(data)
         count -= added_count
     return last_question
