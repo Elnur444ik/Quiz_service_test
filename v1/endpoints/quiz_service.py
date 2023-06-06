@@ -4,7 +4,7 @@ import httpx
 from fastapi import APIRouter, HTTPException, Depends
 from httpx import Response
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, JSON
+from sqlalchemy import select, JSON, exists, insert
 from core.models.database import get_async_session
 from core.models.models import Question
 from core.schemas.schema import QuestionCount, QuestionSave
@@ -15,15 +15,17 @@ router = APIRouter(
 )
 
 
-async def add_question(question: dict, session: AsyncSession = Depends(get_async_session)):
+async def add_question(question: dict, session):
+
     # if not Question.filter(Question.question_id == question.get('id')):
-    query = select(Question).where(Question.question_id == question.get('id')).exists()
-    # result = await session.execute(query)
-    print(type(query))
-    print(query)
-    print('fdsfsdfsdfsdfsdfsdfsdfsdfsdfsdfdsfsdfsdfsdfsdfsdfsdfsdfsdfsdf')
-    if not query:
-        stmt = Question.insert().values(
+    # query = select(Question).where(Question.question_id == question.get('id'))
+    # query = exists(query).select()
+    query = select(Question).where(Question.question_id == question.get('id'))
+    query = exists(query).select()
+    result = await session.execute(query)
+
+    if not result:
+        stmt = insert(Question).values(
             question_id=question.get('id'),
             question_text=question.get('question'),
             answer_text=question.get('answer'),
@@ -35,10 +37,10 @@ async def add_question(question: dict, session: AsyncSession = Depends(get_async
         return True
 
 
-async def add_questions(data: JSON) -> int:
+async def add_questions(data: JSON, session) -> int:
     added_count = 0
     for question in data:
-        if await add_question(question):
+        if await add_question(question, session):
             added_count += 1
     return added_count
 
@@ -64,6 +66,6 @@ async def question_count(question_num: QuestionCount, session: AsyncSession = De
     last_question = last_question.first()
     while count > 0:
         data = await request_questions(count)
-        added_count = await add_questions(data)
+        added_count = await add_questions(data, session)
         count -= added_count
     return last_question
