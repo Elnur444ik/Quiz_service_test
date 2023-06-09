@@ -8,6 +8,11 @@ class QuestionCount(BaseModel):
     count: int
 
 
+class TunedModel(BaseModel):
+    class Config:
+        orm_mode = True
+
+
 class QuestionSave(BaseModel):
     question_id: int
     question_text: str

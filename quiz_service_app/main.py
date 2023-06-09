@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from v1.endpoints.quiz_service import router as question_router
 
 app = FastAPI(
-    title='quiz_service'
+    title='quiz_service_app'
 )
 
 app.include_router(question_router)
